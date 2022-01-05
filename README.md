@@ -1,5 +1,5 @@
 # oauth2
-本プログラムは、https://reon777.com/2021/07/10/oauth2-client-app-nodejs/ を参考にして作成してある。
+https://reon777.com/2021/07/10/oauth2-client-app-nodejs/ を参考に作成
 
 ## セットアップ
 
