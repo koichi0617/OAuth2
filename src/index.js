@@ -53,9 +53,12 @@ app.get('/auth/callback', function(req, res) {
     })
 })
 
-var ClientOAuth2 = require('client-oauth2')
+var ClientOAuth2 = require('client-oauth2');
+const { log } = require('console');
 
 var githubAuth = new ClientOAuth2({
+    // clientId: '',
+    // clientSecret: '',
     clientId: `${process.env.CLIENT_ID}`,
     clientSecret: `${process.env.CLIENT_SECRET}`,
     accessTokenUri: 'https://github.com/login/oauth/access_token',
