@@ -1,8 +1,10 @@
 const path = require('path');
 require('dotenv').config({path: path.join(__dirname, "../.env")});
-
-var express = require('express')
-var app = express()
+const express = require('express')
+const app = express()
+const {Issuer, generators} = require('openid-client')
+let githubIssuer;
+let client;
 
 // Cross-Origin Resource Sharingを有効にする記述（HTTPレスポンスヘッダの追加）
 app.use(function (req, res, next) {
@@ -19,50 +21,56 @@ app.options('*', function (req, res) {
     res.sendStatus(200);
 });
 
+
 //APIサーバを http://localhost:8082 で立ち上げ
 var server = app.listen(8082, function(){
+    Issuer.discover('https://accounts.google.com/.well-known/openid-configuration').then(function(githubIssuer){
+    console.log('Discoverd issuer %s %O', githubIssuer.issuer, githubIssuer.metadata);
+    })
+    client = new githubIssuer.Client({
+        client_id: `${process.env.CLIENT_ID}`,
+        client_secret: `${process.env.CLIENT_SECRET}`,
+        redirect_uris: ['http://localhost:8082/auth/callback'],
+        response_types: ['code'],
+    });
     console.log("Node.js is listening to PORT:" + server.address().port)
 });
 
 //OAuthで利用する認証画面のURLを取得し、レスポンスとして返却
 app.get('/auth', function(req, res) {
-    var uri = githubAuth.code.getUri()
-    console.log({uri});
-    res.json(uri)
+    if(req.session.loggedIn){
+        return res.send('OK!');
+    }
+    const code_verifier = generators.codeVerifier();
+    const code_challenge = generators.codeChallenge(code_verifier);
+    const nonce = generators.nonce();
+    const state = generators.state();
+    const url = client.authorizationUrl({
+        scope: 'openid',
+        state,
+        nonce,
+        code_challenge,
+        code_challenge_method: 'S256',
+    });
+    req.session.state = state;
+    req.session.code_verifier = code_verifier;
+    req.session.originalUrl = req.originalUrl;
+    req.session.nonce = nonce;
+    return res.redirect(url);
 })
 
 //ログイン後に遷移するコールバック
 app.get('/auth/callback', function(req, res) {
-    console.log(req.originalUrl)
-    githubAuth.code.getToken(req.originalUrl).then(function(user) {
-        try {
-            console.log({user})
-            //トークンをリフレッシュ
-            user.refresh().then(function(updatedUser) {
-                console.log(updatedUser !== user)
-                console.log(updatedUser.accessToken)
-            })
-            console.log(user.accessToken)
-            //アクセストークンを受け取る画面を指定
-            res.redirect('http://localhost:8080?accessToken=' + user.accessToken)
-        } catch (e) {
-            console.log('/auth/callback でエラー')
-            console.log(e)
-            res.send('')
-        }
-    })
-})
-
-var ClientOAuth2 = require('client-oauth2');
-const { log } = require('console');
-
-var githubAuth = new ClientOAuth2({
-    // clientId: '',
-    // clientSecret: '',
-    clientId: `${process.env.CLIENT_ID}`,
-    clientSecret: `${process.env.CLIENT_SECRET}`,
-    accessTokenUri: 'https://github.com/login/oauth/access_token',
-    authorizationUri: 'https://github.com/login/oauth/authorize',
-    redirectUri: 'http://localhost:8082/auth/callback',
-    scopes: ['notifications', 'gist']
+    if (!req.session){
+        return res.status(403).send('NG');
+    }
+    const state = req.session.state;
+    const code_verifier = req.session.code_verifier;
+    const nonce = req.session.nonce;
+    const params = client.callbackParams(req);
+    const tokenSet = await client.callback('http://localhost:8080/auth/callback', params, { code_verifier, state, nonce });
+    console.log('received and validated tokens %j', tokenSet);
+    console.log('validated ID Token claims %j', tokenSet.claims());
+    req.session.loggedIn = true;
+    return res.redirect(req.session.originalUrl);
 })
