@@ -2,8 +2,11 @@ const path = require('path');
 require('dotenv').config({path: path.join(__dirname, "../.env")});
 const express = require('express')
 const app = express()
+const crypto = require('crypto');
+const cookieSession = require('cookie-session');
+const cookieParser = require('cookie-parser');
 const {Issuer, generators} = require('openid-client')
-let githubIssuer;
+let googleIssuer;
 let client;
 
 // Cross-Origin Resource Sharingを有効にする記述（HTTPレスポンスヘッダの追加）
@@ -21,13 +24,21 @@ app.options('*', function (req, res) {
     res.sendStatus(200);
 });
 
+//ログイン情報を保持するCookie設定
+app.use(cookieSession({
+    /* ----- session ----- */
+    name: 'session',
+    keys: [crypto.randomBytes(32).toString('hex')],
+    // Cookie Options
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }))
+  app.use(cookieParser())
 
 //APIサーバを http://localhost:8082 で立ち上げ
-var server = app.listen(8082, function(){
-    Issuer.discover('https://accounts.google.com/.well-known/openid-configuration').then(function(githubIssuer){
-    console.log('Discoverd issuer %s %O', githubIssuer.issuer, githubIssuer.metadata);
-    })
-    client = new githubIssuer.Client({
+app.listen(8082, async () => {
+    googleIssuer = await Issuer.discover('https://accounts.google.com/.well-known/openid-configuration');
+    console.log('Discoverd issuer %s %O', googleIssuer.issuer, googleIssuer.metadata);
+    client = new googleIssuer.Client({
         client_id: `${process.env.CLIENT_ID}`,
         client_secret: `${process.env.CLIENT_SECRET}`,
         redirect_uris: ['http://localhost:8082/auth/callback'],
@@ -37,40 +48,44 @@ var server = app.listen(8082, function(){
 });
 
 //OAuthで利用する認証画面のURLを取得し、レスポンスとして返却
-app.get('/auth', function(req, res) {
-    if(req.session.loggedIn){
-        return res.send('OK!');
-    }
-    const code_verifier = generators.codeVerifier();
-    const code_challenge = generators.codeChallenge(code_verifier);
-    const nonce = generators.nonce();
-    const state = generators.state();
-    const url = client.authorizationUrl({
-        scope: 'openid',
-        state,
-        nonce,
-        code_challenge,
-        code_challenge_method: 'S256',
-    });
-    req.session.state = state;
-    req.session.code_verifier = code_verifier;
-    req.session.originalUrl = req.originalUrl;
-    req.session.nonce = nonce;
-    return res.redirect(url);
+app.get('/auth', (req, res, next) => {
+    (async () => {
+        if(req.session.loggedIn){
+            return res.send('OK!');
+        }
+        const code_verifier = generators.codeVerifier();
+        const code_challenge = generators.codeChallenge(code_verifier);
+        const nonce = generators.nonce();
+        const state = generators.state();
+        const url = client.authorizationUrl({
+            scope: 'openid',
+            state,
+            code_challenge,
+            code_challenge_method: 'S256',
+            nonce,
+        });
+        req.session.state = state;
+        req.session.code_verifier = code_verifier;
+        req.session.originalUrl = req.originalUrl;
+        req.session.nonce = nonce;
+        return res.json(url);
+    })().catch(next);
 })
 
 //ログイン後に遷移するコールバック
-app.get('/auth/callback', function(req, res) {
-    if (!req.session){
+app.get('/auth/callback', (req, res, next) => {
+    (async () => {
+      if (!req.session) {
         return res.status(403).send('NG');
-    }
-    const state = req.session.state;
-    const code_verifier = req.session.code_verifier;
-    const nonce = req.session.nonce;
-    const params = client.callbackParams(req);
-    const tokenSet = await client.callback('http://localhost:8080/auth/callback', params, { code_verifier, state, nonce });
-    console.log('received and validated tokens %j', tokenSet);
-    console.log('validated ID Token claims %j', tokenSet.claims());
-    req.session.loggedIn = true;
-    return res.redirect(req.session.originalUrl);
-})
+      }
+      const state = req.session.state;
+      const code_verifier = req.session.code_verifier;
+      const nonce = req.session.nonce;
+      const params = client.callbackParams(req);
+      const tokenSet = await client.callback('http://localhost:8082/auth/callback', params, { code_verifier, state, nonce });
+      console.log('received and validated tokens %j', tokenSet);
+      console.log('validated ID Token claims %j', tokenSet.claims());
+      req.session.loggedIn = true;
+      return res.redirect(req.session.originalUrl);
+    })().catch(next);
+  })
