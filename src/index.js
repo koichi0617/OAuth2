@@ -5,24 +5,31 @@ const app = express()
 const crypto = require('crypto');
 const cookieSession = require('cookie-session');
 const cookieParser = require('cookie-parser');
-const {Issuer, generators} = require('openid-client')
+const {HttpProxyAgent} = require('hpagent');
+const {Issuer, generators} = require('openid-client').custom.setHttpOptionsDefaults({
+    agent: {
+        http: new HttpProxyAgent({
+            keepAlive: true,
+            keepAliveMsecs: 1000,
+            maxSockets: 256,
+            maxFreeSockets: 256,
+            scheduling: 'lifo',
+            proxy: 'http://yamasaki-koichi%40jp.fujitsu.com:5106175176@rep2-ng.proxy.nic.fujitsu.com:8080/'
+        })
+    }
+})
 let googleIssuer;
 let client;
 
-// Cross-Origin Resource Sharingを有効にする記述（HTTPレスポンスヘッダの追加）
-app.use(function (req, res, next) {
-    res.header('Access-Control-Allow-Origin', req.headers.origin);
-    res.header('Access-Control-Allow-Headers', 'X-Requested-With, X-HTTP-Method-Override, Content-Type, Accept');
-    res.header('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Credentials', true);
-    res.header('Access-Control-Max-Age', '86400');
-    next();
-});
+// const agent = new HttpProxyAgent({
+//     keepAlive: true,
+//     keepAliveMsecs: 1000,
+//     maxSockets: 256,
+//     maxFreeSockets: 256,
+//     scheduling: 'lifo',
+//     proxy: 'http://yamasaki-koichi%40jp.fujitsu.com:5106175176@rep2-ng.proxy.nic.fujitsu.com:8080/'
+// })
 
-// OPTIONSメソッドの実装
-app.options('*', function (req, res) {
-    res.sendStatus(200);
-});
 
 //ログイン情報を保持するCookie設定
 app.use(cookieSession({
@@ -31,8 +38,8 @@ app.use(cookieSession({
     keys: [crypto.randomBytes(32).toString('hex')],
     // Cookie Options
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }))
-  app.use(cookieParser())
+}))
+app.use(cookieParser())
 
 //APIサーバを http://localhost:8082 で立ち上げ
 app.listen(8082, async () => {
@@ -89,3 +96,19 @@ app.get('/auth/callback', (req, res, next) => {
       return res.redirect(req.session.originalUrl);
     })().catch(next);
   })
+
+  
+// Cross-Origin Resource Sharingを有効にする記述（HTTPレスポンスヘッダの追加）
+app.use(function (req, res, next) {
+    res.header('Access-Control-Allow-Origin', req.headers.origin);
+    res.header('Access-Control-Allow-Headers', 'X-Requested-With, X-HTTP-Method-Override, Content-Type, Accept');
+    res.header('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Credentials', true);
+    res.header('Access-Control-Max-Age', '86400');
+    next();
+});
+
+// OPTIONSメソッドの実装
+app.options('*', function (req, res) {
+    res.sendStatus(200);
+});
