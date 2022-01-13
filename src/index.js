@@ -6,40 +6,19 @@ const crypto = require('crypto');
 const cookieSession = require('cookie-session');
 const cookieParser = require('cookie-parser');
 const {HttpProxyAgent} = require('hpagent');
-const {Issuer, generators} = require('openid-client').custom.setHttpOptionsDefaults({
-    agent: {
-        http: new HttpProxyAgent({
-            keepAlive: true,
-            keepAliveMsecs: 1000,
-            maxSockets: 256,
-            maxFreeSockets: 256,
-            scheduling: 'lifo',
-            proxy: 'http://yamasaki-koichi%40jp.fujitsu.com:5106175176@rep2-ng.proxy.nic.fujitsu.com:8080/'
-        })
-    }
-})
+const {Issuer, generators, custom} = require('openid-client')
 let googleIssuer;
 let client;
 
-// const agent = new HttpProxyAgent({
-//     keepAlive: true,
-//     keepAliveMsecs: 1000,
-//     maxSockets: 256,
-//     maxFreeSockets: 256,
-//     scheduling: 'lifo',
-//     proxy: 'http://yamasaki-koichi%40jp.fujitsu.com:5106175176@rep2-ng.proxy.nic.fujitsu.com:8080/'
-// })
+custom.setHttpOptionsDefaults({
+    keepAlive: true,
+    keepAliveMsecs: 1000,
+    maxSockets: 256,
+    maxFreeSockets: 256,
+    scheduling: 'lifo',
+    proxy: `${process.env.PROXY}`,
+});
 
-
-//ログイン情報を保持するCookie設定
-app.use(cookieSession({
-    /* ----- session ----- */
-    name: 'session',
-    keys: [crypto.randomBytes(32).toString('hex')],
-    // Cookie Options
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-}))
-app.use(cookieParser())
 
 //APIサーバを http://localhost:8082 で立ち上げ
 app.listen(8082, async () => {
@@ -96,6 +75,17 @@ app.get('/auth/callback', (req, res, next) => {
       return res.redirect(req.session.originalUrl);
     })().catch(next);
   })
+
+  
+//ログイン情報を保持するCookie設定
+app.use(cookieSession({
+    /* ----- session ----- */
+    name: 'session',
+    keys: [crypto.randomBytes(32).toString('hex')],
+    // Cookie Options
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+}))
+app.use(cookieParser())
 
   
 // Cross-Origin Resource Sharingを有効にする記述（HTTPレスポンスヘッダの追加）
