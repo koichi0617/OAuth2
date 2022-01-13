@@ -1,5 +1,5 @@
 # oauth2
-https://reon777.com/2021/07/10/oauth2-client-app-nodejs/ を参考に作成
+https://qiita.com/kg0r0/items/6df1aea4474e8424b10f を参考に作成
 
 ## セットアップ
 
@@ -7,14 +7,6 @@ https://reon777.com/2021/07/10/oauth2-client-app-nodejs/ を参考に作成
     ```
     npm install
     ```
-
-* Githubアカウントへのアプリ登録
-  * ClientIDとClientSecretを取得
-    * https://docs.github.com/ja/developers/apps/building-oauth-apps/authorizing-oauth-apps の手順に従う。
-  * 認可情報を登録
-    * src/index.jsのgithubAuthに情報を記入する。
-
-
 
 ## 操作手順
 
