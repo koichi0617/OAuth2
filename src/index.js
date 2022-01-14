@@ -67,7 +67,6 @@ const server = app.listen(8082, async () => {
         response_types: ['code'],
     });
     console.log("Node.js is listening to PORT:" + server.address().port)
-    // console.log(HTTP_PROXY);
 });
 
 //OAuthで利用する認証画面のURLを取得し、レスポンスとして返却
@@ -81,6 +80,7 @@ app.get('/auth', (req, res, next) => {
         const nonce = generators.nonce();
         // const state = generators.state();
         state = generators.state();
+        //認証画面のURLを生成
         const url = client.authorizationUrl({
             scope: 'openid',
             state,
@@ -88,6 +88,7 @@ app.get('/auth', (req, res, next) => {
             code_challenge_method: 'S256',
             nonce,
         });
+        //ログイン後の画面で検証するために各パラメータをsessionに渡す
         // req.session.state = state;
         req.session.code_verifier = code_verifier;
         req.session.originalUrl = req.originalUrl;
@@ -98,7 +99,8 @@ app.get('/auth', (req, res, next) => {
     })().catch(next);
 })
 
-//ログイン後に遷移するコールバック
+//認証画面でログイン後に遷移するコールバック
+//パラメータとしてcode=<認可コード>,state=<ランダム文字列>がついてくる
 app.get('/auth/callback', (req, res, next) => {
     (async () => {
         console.log('~callback~');
@@ -108,12 +110,14 @@ app.get('/auth/callback', (req, res, next) => {
         // const state = req.session.state;
         const code_verifier = req.session.code_verifier;
         const nonce = req.session.nonce;
+        //code(認可コード)をparamsに取り出し
         const params = client.callbackParams(req);
         console.log(req.session);
         console.log(state);
         console.log(code_verifier);
         console.log(params);
         //ここのコールバック処理でプロキシエラーになる
+        //認可コードをtoken_endpointに送信してアクセストークンを取得
         const tokenSet = await client.callback('http://localhost:8082/auth/callback', params, { code_verifier, state, nonce });
         console.log('received and validated tokens %j', tokenSet);
         console.log('validated ID Token claims %j', tokenSet.claims());
